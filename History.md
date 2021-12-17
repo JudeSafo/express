@@ -1,3 +1,8 @@
+unreleased
+==========
+
+  * Use `http-errors` for `res.format()` error
+
 4.17.3 / 2022-02-16
 ===================
 

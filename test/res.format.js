@@ -5,85 +5,35 @@ var express = require('../')
   , request = require('supertest')
   , assert = require('assert');
 
-var app1 = express();
-
-app1.use(function(req, res, next){
-  res.format({
-    'text/plain': function(){
-      res.send('hey');
-    },
-
-    'text/html': function(){
-      res.send('<p>hey</p>');
-    },
-
-    'application/json': function(a, b, c){
-      assert(req === a)
-      assert(res === b)
-      assert(next === c)
-      res.send({ message: 'hey' });
-    }
-  });
-});
-
-app1.use(function(err, req, res, next){
-  if (!err.types) throw err;
-  res.send(err.status, 'Supports: ' + err.types.join(', '));
-})
-
-var app2 = express();
-
-app2.use(function(req, res, next){
-  res.format({
-    text: function(){ res.send('hey') },
-    html: function(){ res.send('<p>hey</p>') },
-    json: function(){ res.send({ message: 'hey' }) }
-  });
-});
-
-app2.use(function(err, req, res, next){
-  res.send(err.status, 'Supports: ' + err.types.join(', '));
-})
-
-var app3 = express();
-
-app3.use(function(req, res, next){
-  res.format({
-    text: function(){ res.send('hey') },
-    default: function(){ res.send('default') }
-  })
-});
-
-var app4 = express();
-
-app4.get('/', function(req, res, next){
-  res.format({
-    text: function(){ res.send('hey') },
-    html: function(){ res.send('<p>hey</p>') },
-    json: function(){ res.send({ message: 'hey' }) }
-  });
-});
-
-app4.use(function(err, req, res, next){
-  res.send(err.status, 'Supports: ' + err.types.join(', '));
-})
-
-var app5 = express();
-
-app5.use(function (req, res, next) {
-  res.format({
-    default: function () { res.send('hey') }
-  });
-});
-
 describe('res', function(){
   describe('.format(obj)', function(){
     describe('with canonicalized mime types', function(){
-      test(app1);
+      test(createApp(function (req, res, next) {
+        res.format({
+          'text/plain': function () {
+            res.send('hey')
+          },
+          'text/html': function () {
+            res.send('<p>hey</p>')
+          },
+          'application/json': function (a, b, c) {
+            assert(req === a)
+            assert(res === b)
+            assert(next === c)
+            res.send({ message: 'hey' })
+          }
+        })
+      }))
     })
 
     describe('with extnames', function(){
-      test(app2);
+      test(createApp(function (req, res) {
+        res.format({
+          text: function () { res.send('hey') },
+          html: function () { res.send('<p>hey</p>') },
+          json: function () { res.send({ message: 'hey' }) }
+        })
+      }))
     })
 
     describe('with parameters', function(){
@@ -106,14 +56,27 @@ describe('res', function(){
 
     describe('given .default', function(){
       it('should be invoked instead of auto-responding', function(done){
-        request(app3)
+        var app = createApp(function (req, res) {
+          res.format({
+            text: function () { res.send('hey') },
+            default: function () { res.send('default') }
+          })
+        })
+
+        request(app)
         .get('/')
         .set('Accept', 'text/html')
         .expect('default', done);
       })
 
       it('should work when only .default is provided', function (done) {
-        request(app5)
+        var app = createApp(function (req, res) {
+          res.format({
+            default: function () { res.send('hey') }
+          })
+        })
+
+        request(app)
         .get('/')
         .set('Accept', '*/*')
         .expect('hey', done);
@@ -121,7 +84,13 @@ describe('res', function(){
     })
 
     describe('in router', function(){
-      test(app4);
+      test(createApp(function (req, res) {
+        res.format({
+          text: function () { res.send('hey') },
+          html: function () { res.send('<p>hey</p>') },
+          json: function () { res.send({ message: 'hey' }) }
+        })
+      }))
     })
 
     describe('in router', function(){
@@ -213,4 +182,19 @@ function test(app) {
       .expect(406, done)
     })
   })
+}
+
+function createApp (fn) {
+  var app = express()
+
+  app.use(fn)
+
+  app.use(function (err, req, res, next) {
+    if (!err.types) return next(err)
+    res.status(err.statusCode || 500)
+    res.type('txt')
+    res.send('Supports: ' + err.types.join(', '))
+  })
+
+  return app
 }
